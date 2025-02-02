@@ -244,25 +244,28 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class 
         where TServiceType : class
     {
-        if (services.Any(x => !x.IsKeyedService && x.ServiceType == typeof(IConfigurationScopedServiceScopeProvider<TServiceType>)))
+        if (services.IsRegistered<IConfigurationScopedServiceScopeFactory<TServiceType>>())
         {
-            throw new InvalidOperationException($"Configuration scoped service already registered. If multiple registrations of the same type are required, register as keyed instead.");
+            throw new InvalidOperationException("Configuration scoped service already registered.  If multiple registrations are required, use keyed registration instead.");
         }
 
         // Allows callers to resolve a scope provider for TServiceType, which can be used anywhere (request handlers, background workers, etc...) 
-        services.TryAddSingleton<IConfigurationScopedServiceScopeProvider<TServiceType>>(sp => new OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>(
+        services.TryAddSingleton(sp => new OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>(
             optionsName,
             runtimeOptions,
             sp.GetRequiredService<IOptionsMonitor<TOptionsType>>(),
             serviceFactoryFactory(sp),
-            sp.GetRequiredService<ILogger<OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>>>()));
+            sp.GetRequiredService<ILogger<OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>>>()));
+
+        services.TryAddSingleton<IConfigurationScopedServiceScopeFactory<TServiceType>>((sp) => sp.GetRequiredService<OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>>());
+        services.TryAddSingleton<IOptionsChangeConsumer<TOptionsType>>((sp) => sp.GetRequiredService<OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>>());
 
         // This layer of indirection is to allow the refcount decrement to happen on scope end.  The type is internal, so users can't resolve it without doing nasty things.  The resolution used by 
         // callers will be of TServiceType
         services.TryAddScoped(sp =>
         {
-            var config_scoped_service = sp.GetRequiredService<IConfigurationScopedServiceScopeProvider<TServiceType>>();
-            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.CreateScope());
+            var config_scoped_service = sp.GetRequiredService<IConfigurationScopedServiceScopeFactory<TServiceType>>();
+            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.Create());
         });
 
         // Allows callers to resolve TServiceType tied directly to the request scope
@@ -274,26 +277,28 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class
         where TServiceType : class
     {
-        if (services.Any(s => s.IsKeyedService && s.ServiceType == typeof(IConfigurationScopedServiceScopeProvider<TServiceType>) && ((s.ServiceKey is null && serviceKey is null) ||
-                                                                                                                                      (s.ServiceKey is not null && s.ServiceKey.Equals(serviceKey)))))
+        if (services.IsRegisteredKeyed<IConfigurationScopedServiceScopeFactory<TServiceType>>(serviceKey))
         {
-            throw new InvalidOperationException($"Configuration scoped service already registered with key.  Multiple registrations of a type with the same key is not supported.");
+            throw new InvalidOperationException("Configuration scoped service already registered with key.  Multiple registrations of a type with the same key is not supported.");
         }
 
         // Allows callers to resolve a scope provider for TServiceType, which can be used anywhere (request handlers, background workers, etc...) 
-        services.TryAddKeyedSingleton<IConfigurationScopedServiceScopeProvider<TServiceType>>(serviceKey, (sp, k) => new OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>(
+        services.TryAddKeyedSingleton(serviceKey, (sp, k) => new OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>(
             optionsName,
             runtimeOptions,
             sp.GetRequiredService<IOptionsMonitor<TOptionsType>>(),
             serviceFactoryFactory(sp, k),
-            sp.GetRequiredService<ILogger<OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>>>()));
+            sp.GetRequiredService<ILogger<OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>>>()));
+
+        services.TryAddKeyedSingleton<IConfigurationScopedServiceScopeFactory<TServiceType>>(serviceKey, (sp, k) => sp.GetRequiredKeyedService<OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>>(k));
+        services.TryAddKeyedSingleton<IOptionsChangeConsumer<TOptionsType>>(serviceKey, (sp, k) => sp.GetRequiredKeyedService<OptionsMonitorConfigurationScopedServiceManager<TOptionsType, TServiceType>>(k));
 
         // This layer of indirection is to allow the refcount decrement to happen on scope end.  The type is internal, so users can't resolve it without doing nasty things.  The resolution used by 
         // callers will be of TServiceType
         services.TryAddKeyedScoped(serviceKey, (sp, k) =>
         {
-            var config_scoped_service = sp.GetRequiredKeyedService<IConfigurationScopedServiceScopeProvider<TServiceType>>(k);
-            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.CreateScope());
+            var config_scoped_service = sp.GetRequiredKeyedService<IConfigurationScopedServiceScopeFactory<TServiceType>>(k);
+            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.Create());
         });
 
         // Allows callers to resolve TServiceType tied directly to the request scope

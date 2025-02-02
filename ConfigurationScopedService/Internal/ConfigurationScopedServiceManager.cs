@@ -4,7 +4,7 @@ using Nito.Disposables;
 
 namespace ConfigurationScopedService.Internal;
 
-internal abstract class ConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType> : IConfigurationScopedServiceScopeProvider<TServiceType>, IAsyncDisposable 
+internal abstract class ConfigurationScopedServiceManager<TOptionsType, TServiceType> : IConfigurationScopedServiceScopeFactory<TServiceType>, IOptionsChangeConsumer<TOptionsType>, IAsyncDisposable 
     where TOptionsType : class
     where TServiceType : class
 {
@@ -25,7 +25,7 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TOptionsType, TS
 
     private readonly List<OldServiceInfo> _servicesWaitingForPhaseOut = [];
 
-    protected ConfigurationScopedServiceScopeProvider(ConfigurationScopeRuntimeOptions runtimeOptions, TOptionsType initialOptions, IServiceFactory<TOptionsType, TServiceType> serviceFactory, ILogger logger)
+    protected ConfigurationScopedServiceManager(ConfigurationScopeRuntimeOptions runtimeOptions, TOptionsType initialOptions, IServiceFactory<TOptionsType, TServiceType> serviceFactory, ILogger logger)
     {
         _logger = logger;
         _serviceFactory = serviceFactory;
@@ -48,12 +48,12 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TOptionsType, TS
         }, _cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    protected void ConsumeChange(TOptionsType options)
+    public void ConsumeChange(TOptionsType options)
     {
         _incomingOptionsChanges.Enqueue(options);
     }
 
-    public IConfigurationScopedServiceScope<TServiceType> CreateScope() => new ConfigurationScopedServiceScope(_refCountedService.AddReference());
+    public IConfigurationScopedServiceScope<TServiceType> Create() => new ConfigurationScopedServiceScope(_refCountedService.AddReference());
 
     protected virtual async ValueTask DisposeCoreAsync()
     {
