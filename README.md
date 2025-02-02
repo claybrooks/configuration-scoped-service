@@ -197,6 +197,5 @@ You can convince yourself of this by running the TestApi project in the repo and
  4. "TestWithDelay" will eventually throw an exception
 
 There is no form of locking, either internally in MyService or externally in the controller, that can fix this problem.
-In fact, it is fundamentally impossible to fix this problem in either the service or the controller if your service requires unchanging configuration across function calls.
 
 **See above on how you can ensure a configuration rug pull doesn't happen mid request :)**

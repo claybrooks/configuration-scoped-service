@@ -10,12 +10,12 @@
     <PropertyGroup>
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
         <Company>$(Authors)</Company>
-        <Description>Configuration scoped lifetime to faciliate safe reload of services in a live application.</Description>
+        <Description>ConfigurationScoped lifetime to faciliate safe reloading of services in a live application.</Description>
         <Authors>Clay Brooks</Authors>
         <Copyright>This is free and unencumbered software released into the public domain.</Copyright>
         <PackageProjectUrl>https://github.com/claybrooks/configuration-scoped-service</PackageProjectUrl>
         <RepositoryUrl>https://github.com/claybrooks/configuration-scoped-service</RepositoryUrl>
-        <PackageTags>aspnet;service;service lifetime;configuration;reload</PackageTags>
+        <PackageTags>aspnet;service;lifetime;configuration;reload</PackageTags>
         <PackageLicenseExpression>Unlicense</PackageLicenseExpression>
         <Version>1.0.0</Version>
     </PropertyGroup>
