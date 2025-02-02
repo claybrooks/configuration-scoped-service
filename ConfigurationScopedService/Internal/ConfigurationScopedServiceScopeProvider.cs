@@ -4,7 +4,7 @@ using Nito.Disposables;
 
 namespace ConfigurationScopedService.Internal;
 
-internal abstract class AbstractConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> : IConfigurationScopedServiceScopeProvider<TServiceType>, IAsyncDisposable where TConfigType : class where TServiceType : class
+internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> : IConfigurationScopedServiceScopeProvider<TServiceType>, IAsyncDisposable where TConfigType : class where TServiceType : class
 {
     private readonly ConfigurationScopeRuntimeOptions _runtimeOptions;
 
@@ -24,7 +24,7 @@ internal abstract class AbstractConfigurationScopedServiceScopeProvider<TConfigT
 
     private readonly List<OldServiceInfo> _servicesWaitingForPhaseOut = [];
 
-    protected AbstractConfigurationScopedServiceScopeProvider(ConfigurationScopeRuntimeOptions runtimeOptions, TConfigType initialConfig, IServiceFactory<TConfigType, TServiceType> serviceFactory, ILogger logger)
+    protected ConfigurationScopedServiceScopeProvider(ConfigurationScopeRuntimeOptions runtimeOptions, TConfigType initialConfig, IServiceFactory<TConfigType, TServiceType> serviceFactory, ILogger logger)
     {
         _timeProvider = TimeProvider.System;
         _logger = logger;
@@ -47,7 +47,7 @@ internal abstract class AbstractConfigurationScopedServiceScopeProvider<TConfigT
         }, _cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    protected void AddConfigToQueue(TConfigType config)
+    protected void ConsumeChange(TConfigType config)
     {
         _incomingConfigChanges.Enqueue(config);
     }

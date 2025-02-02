@@ -15,6 +15,8 @@ builder.Services.Configure<MyOptions>(MyKeys.Key2, builder.Configuration.GetSect
 builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>(MyKeys.Key1, MyKeys.Key1, (sp, key, config) => new MyService(config));
 builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>(MyKeys.Key2, MyKeys.Key2, (sp, key, config) => new MyService(config));
 
+builder.Services.AddConfigurationScoped<MyOptions, MyService>(MyKeys.Key1, (sp, config) => new MyService(config));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -244,14 +244,17 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class 
         where TServiceType : class
     {
-        services.TryAddSingleton(serviceFactoryFactory);
+        if (services.Any(x => !x.IsKeyedService && x.ServiceType == typeof(IConfigurationScopedServiceScopeProvider<TServiceType>)))
+        {
+            throw new InvalidOperationException($"Configuration scoped service already registered. If multiple registrations of the same type are required, register as keyed instead.");
+        }
 
         // Allows callers to resolve a scope provider for TServiceType, which can be used anywhere (request handlers, background workers, etc...) 
         services.TryAddSingleton<IConfigurationScopedServiceScopeProvider<TServiceType>>(sp => new OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>(
             optionsName,
             runtimeOptions,
             sp.GetRequiredService<IOptionsMonitor<TOptionsType>>(),
-            sp.GetRequiredService<IServiceFactory<TOptionsType, TServiceType>>(),
+            serviceFactoryFactory(sp),
             sp.GetRequiredService<ILogger<OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>>>()));
 
         // This layer of indirection is to allow the refcount decrement to happen on scope end.  The type is internal, so users can't resolve it without doing nasty things.  The resolution used by 
@@ -271,14 +274,18 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class
         where TServiceType : class
     {
-        services.TryAddKeyedSingleton(serviceKey, serviceFactoryFactory);
+        if (services.Any(s => s.IsKeyedService && s.ServiceType == typeof(IConfigurationScopedServiceScopeProvider<TServiceType>) && ((s.ServiceKey is null && serviceKey is null) ||
+                                                                                                                                      (s.ServiceKey is not null && s.ServiceKey.Equals(serviceKey)))))
+        {
+            throw new InvalidOperationException($"Configuration scoped service already registered with key.  Multiple registrations of a type with the same key is not supported.");
+        }
 
         // Allows callers to resolve a scope provider for TServiceType, which can be used anywhere (request handlers, background workers, etc...) 
         services.TryAddKeyedSingleton<IConfigurationScopedServiceScopeProvider<TServiceType>>(serviceKey, (sp, k) => new OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>(
             optionsName,
             runtimeOptions,
             sp.GetRequiredService<IOptionsMonitor<TOptionsType>>(),
-            sp.GetRequiredKeyedService<IServiceFactory<TOptionsType, TServiceType>>(k),
+            serviceFactoryFactory(sp, k),
             sp.GetRequiredService<ILogger<OptionsMonitorConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType>>>()));
 
         // This layer of indirection is to allow the refcount decrement to happen on scope end.  The type is internal, so users can't resolve it without doing nasty things.  The resolution used by 

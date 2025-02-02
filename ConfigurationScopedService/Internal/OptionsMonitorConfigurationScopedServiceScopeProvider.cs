@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace ConfigurationScopedService.Internal;
 
-internal sealed class OptionsMonitorConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> : AbstractConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> where TConfigType : class where TServiceType : class
+internal sealed class OptionsMonitorConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> : ConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> where TConfigType : class where TServiceType : class
 {
     private readonly IDisposable? _changeDisposable;
 
@@ -16,7 +16,7 @@ internal sealed class OptionsMonitorConfigurationScopedServiceScopeProvider<TCon
     {
         if (optionsName is null)
         {
-            _changeDisposable = optionsMonitor.OnChange(AddConfigToQueue);
+            _changeDisposable = optionsMonitor.OnChange(ConsumeChange);
         }
         else
         {
@@ -24,7 +24,7 @@ internal sealed class OptionsMonitorConfigurationScopedServiceScopeProvider<TCon
             {
                 if (name == optionsName)
                 {
-                    AddConfigToQueue(o);
+                    ConsumeChange(o);
                 }
             });
         }
