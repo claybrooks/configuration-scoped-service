@@ -1,43 +1,37 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace TestApi.Controllers;
 
-public static class MyKeys
-{
-    public const string Key1 = "key1";
-    public const string Key2 = "key2";
-}
-
 public class MyOptions
 {
-    public bool Enabled { get; set; }
+    public bool FeatureAEnabled { get; set; }
     public int Value { get; set; }
 }
 
-public interface IMyService
+public class MyService
 {
-    bool IsEnabled();
-    int GetValue();
-}
+    private MyOptions _options;
 
-public class MyService : IMyService
-{
-    private readonly MyOptions _options;
-
-    public MyService(MyOptions options)
+    public MyService(IOptionsMonitor<MyOptions> optionsMonitor)
     {
-        _options = options;
+        _options = optionsMonitor.CurrentValue;
+        optionsMonitor.OnChange(o => _options = o);
     }
 
-    public bool IsEnabled() => _options.Enabled;
-
-    public int GetValue()
+    public bool IsFeatureAEnabled()
     {
-        if (!_options.Enabled)
+        return _options.FeatureAEnabled;
+    }
+
+    public int DoFeatureA()
+    {
+        if (!_options.FeatureAEnabled)
         {
-            throw new InvalidOperationException("Service is not enabled");
+            throw new Exception("Feature A is not enabled.  Callers must check first before invoking this method.");
         }
-        return _options.Value;
+        // Do something awesome
+        return 1;
     }
 }
 
@@ -45,41 +39,32 @@ public class MyService : IMyService
 [Route("[controller]")]
 public class MyServiceController : ControllerBase
 {
-    [HttpGet("TestWithDelay_1")]
-    public async Task<int> TestWithDelay1([FromKeyedServices(MyKeys.Key1)] MyService service)
+    private readonly MyService _myService;
+
+    public MyServiceController(MyService myService)
     {
-        if (!service.IsEnabled())
+        _myService = myService;
+    }
+
+    [HttpGet("TestWithDelay")]
+    public async Task<int> TestWithDelay()
+    {
+        if (_myService.IsFeatureAEnabled())
         {
-            return -1;
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            return _myService.DoFeatureA();
         }
-
-        await Task.Delay(TimeSpan.FromSeconds(10));
-        return service.GetValue();
+        return -1;
 
     }
 
-    [HttpGet("Test_1")]
-    public Task<int> Test1([FromKeyedServices(MyKeys.Key1)] MyService service)
+    [HttpGet("Test")]
+    public Task<int> Test()
     {
-        return !service.IsEnabled() ? Task.FromResult(-1) : Task.FromResult(service.GetValue());
-    }
-
-    [HttpGet("TestWithDelay_2")]
-    public async Task<int> TestWithDelay2([FromKeyedServices(MyKeys.Key2)] MyService service)
-    {
-        if (!service.IsEnabled())
+        if (_myService.IsFeatureAEnabled())
         {
-            return -1;
+            return Task.FromResult(_myService.DoFeatureA());
         }
-
-        await Task.Delay(TimeSpan.FromSeconds(10));
-        return service.GetValue();
-
-    }
-
-    [HttpGet("Test_2")]
-    public Task<int> Test2([FromKeyedServices(MyKeys.Key2)] MyService service)
-    {
-        return !service.IsEnabled() ? Task.FromResult(-1) : Task.FromResult(service.GetValue());
+        return Task.FromResult(-1);
     }
 }
