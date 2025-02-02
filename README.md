@@ -3,7 +3,7 @@
 This library provides a mechanism to safely reload services in response to configuration changes. It is designed to work around 
 the concurrency issues introduced by the default `IOptionsMonitor` implementation.  See the bottom of the readme for more information on why `IOptionsMonitor` is  potentially unsafe as a hot-reload trigger.
 
-This library lifts the logic for service reloading in a re-useable and generic manner.  This alleviates developer effort of handling the reload within the service implementation itself. Code that executes in a highly concurrent
+This library lifts the logic for live service reloading in a re-useable and generic manner.  This alleviates developer effort of handling the reload within the service implementation itself. Code that executes in a highly concurrent
 environment is hard enough to write as is, let me help you alleviate some of the pain by automating your live service reloading :)
 
 **Because of the ref-counting and swap approach using in this library, there is a potential for multiple instances of your service being alive at the same time.  This is a trade-off for the added safety.
@@ -11,7 +11,7 @@ If your service can't coexist with another instance of itself, this library is n
 
 ## Introduction
 A service with a ConfigurationScope has it's lifetime tied to the lifetime of a specific configuration section. If the configuration section data never changes
-during the lifetime of the app, the service is effectively a singleton. If the configuration section data changes, the service is reconstructed and made available for use.
+during the lifetime of the app, the service is effectively a singleton. If the configuration section data changes, a new instance of the service is constructed and made available for use.
 
 You can think of the lifetime of ConfigurationScoped as not longer than Singleton but greater than Scoped.
 
@@ -130,7 +130,7 @@ public class MyBackgroundService : BackgroundService
 
 ## Why is IOptionsMonitor Potentially Unsafe As a Reload Trigger?
 IOptionsMonitor change notifications are not coordinated with request processing, or with anything for that matter. They are fired on a background thread and it is up to the application code to deal with it.
-Most of code I see does not take this into account.
+Most code I see does not take this into account.
 
 Take the following example:
 ```csharp

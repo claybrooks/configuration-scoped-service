@@ -11,12 +11,11 @@ public class MyOptions
 
 public class MyService
 {
-    private MyOptions _options;
+    private readonly MyOptions _options;
 
-    public MyService(IOptionsMonitor<MyOptions> optionsMonitor)
+    public MyService(MyOptions options)
     {
-        _options = optionsMonitor.CurrentValue;
-        optionsMonitor.OnChange(o => _options = o);
+        _options = options;
     }
 
     public bool IsFeatureAEnabled()
