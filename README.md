@@ -204,7 +204,8 @@ public class MyServiceController : ControllerBase
 The controller implementation does exactly what it's supposed to do.  It checks if FeatureA is enabled before calling
 in to DoFeatureA(). However, if FeatureA is disabled in the middle of handling this request we may see an exception
 thrown in DoFeatureA().
-You can convince yourself of this by running the TestApi project in the repo and performing the following steps
+You can convince yourself of this by running the IOptionsMonitorSample project in the repo and performing the following
+steps
  1. Run the TestApi project and navigate to the swagger page (Should be https://localhost:7028/swagger)
  2. Invoke the "TestWithDelay" endpoint (it is instrumented to delay for 10 seconds between the IsFeatureAEnabled() and DoFeatureA() calls)
  3. While the endpoint is processing, go to appsettings.json in the solution and set the "FeatureAEnabled" option to false and save the file
