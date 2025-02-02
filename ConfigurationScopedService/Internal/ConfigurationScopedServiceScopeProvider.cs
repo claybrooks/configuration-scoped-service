@@ -4,37 +4,38 @@ using Nito.Disposables;
 
 namespace ConfigurationScopedService.Internal;
 
-internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TServiceType> : IConfigurationScopedServiceScopeProvider<TServiceType>, IAsyncDisposable where TConfigType : class where TServiceType : class
+internal abstract class ConfigurationScopedServiceScopeProvider<TOptionsType, TServiceType> : IConfigurationScopedServiceScopeProvider<TServiceType>, IAsyncDisposable 
+    where TOptionsType : class
+    where TServiceType : class
 {
     private readonly ConfigurationScopeRuntimeOptions _runtimeOptions;
 
-    private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
 
-    private readonly IServiceFactory<TConfigType, TServiceType> _serviceFactory;
+    private readonly IServiceFactory<TOptionsType, TServiceType> _serviceFactory;
 
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _backgroundTask;
 
-    private TConfigType _currentConfig;
+    private TOptionsType _currentOptions;
     private IReferenceCountedDisposable<DisposableServiceWrapper> _refCountedService;
 
-    private readonly ConcurrentQueue<TConfigType> _incomingConfigChanges = [];
+    private readonly ConcurrentQueue<TOptionsType> _incomingOptionsChanges = [];
     private readonly ConcurrentQueue<TServiceType> _requiresDisposal = [];
 
     private readonly List<OldServiceInfo> _servicesWaitingForPhaseOut = [];
 
-    protected ConfigurationScopedServiceScopeProvider(ConfigurationScopeRuntimeOptions runtimeOptions, TConfigType initialConfig, IServiceFactory<TConfigType, TServiceType> serviceFactory, ILogger logger)
+    protected ConfigurationScopedServiceScopeProvider(ConfigurationScopeRuntimeOptions runtimeOptions, TOptionsType initialOptions, IServiceFactory<TOptionsType, TServiceType> serviceFactory, ILogger logger)
     {
-        _timeProvider = TimeProvider.System;
         _logger = logger;
         _serviceFactory = serviceFactory;
         _runtimeOptions = runtimeOptions;
-        _currentConfig = initialConfig;
+        _currentOptions = initialOptions;
 
-        // TODO Fix this
-        var hot_reloadable = serviceFactory.Create(_currentConfig);
-        _refCountedService = DoCreateRefCountedServiceWrapper(hot_reloadable);
+        var service = serviceFactory.Create(_currentOptions);
+
+        _refCountedService = DoCreateRefCountedServiceWrapper(service);
+
         _backgroundTask = Task.Factory.StartNew(async () =>
         {
             try
@@ -47,20 +48,20 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TSe
         }, _cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    protected void ConsumeChange(TConfigType config)
+    protected void ConsumeChange(TOptionsType options)
     {
-        _incomingConfigChanges.Enqueue(config);
+        _incomingOptionsChanges.Enqueue(options);
     }
 
-    public IConfigurationScopedServiceScope<TServiceType> CreateScope() => new NitoReferenceCountedDisposableConfigurationScopedServiceScopeWrapper(_refCountedService.AddReference());
+    public IConfigurationScopedServiceScope<TServiceType> CreateScope() => new ConfigurationScopedServiceScope(_refCountedService.AddReference());
 
     protected virtual async ValueTask DisposeCoreAsync()
     {
-        await _cts.CancelAsync().ConfigureAwait(false);
+        _cts.Cancel();
         await _backgroundTask.ConfigureAwait(false);
         _cts.Dispose();
 
-        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(_refCountedService, _currentConfig));
+        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(_refCountedService, _currentOptions));
         _refCountedService.Dispose();
         DoManageServicesWaitingForDispose();
         await DoDisposeOfServicesAsync().ConfigureAwait(false);
@@ -99,11 +100,11 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TSe
         }
     }
 
-    private TConfigType? DoFlushConfigQueueAndReturnLast()
+    private TOptionsType? DoFlushConfigQueueAndReturnLast()
     {
-        TConfigType? config = null;
+        TOptionsType? config = null;
 
-        while (_incomingConfigChanges.TryDequeue(out var next_config))
+        while (_incomingOptionsChanges.TryDequeue(out var next_config))
         {
             config = next_config;
         }
@@ -111,16 +112,16 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TSe
         return config;
     }
 
-    private void DoServiceSwap(TServiceType service, TConfigType config)
+    private void DoServiceSwap(TServiceType service, TOptionsType config)
     {
         var previous_ref_counted_service = _refCountedService;
 
         _refCountedService = DoCreateRefCountedServiceWrapper(service);
 
-        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(previous_ref_counted_service, _currentConfig));
+        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(previous_ref_counted_service, _currentOptions));
         previous_ref_counted_service.Dispose();
 
-        _currentConfig = config;
+        _currentOptions = config;
     }
 
     private async ValueTask DoDisposeOfServicesAsync()
@@ -148,7 +149,7 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TSe
             {
                 _servicesWaitingForPhaseOut.RemoveAt(i);
             }
-            else if (_runtimeOptions.WarnTime is not null && !next.Lingering && _timeProvider.GetUtcNow() - next.TimeSwapped > _runtimeOptions.WarnTime)
+            else if (_runtimeOptions.WarnTime is not null && !next.Lingering && DateTimeOffset.UtcNow - next.TimeSwapped > _runtimeOptions.WarnTime)
             {
                 next.Lingering = true;
                 _logger.LogWarning("Service has been waiting for phase out for longer than {WarnTime}. This is a bug.", _runtimeOptions.WarnTime);
@@ -161,25 +162,27 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TSe
         return ReferenceCountedDisposable.Create(new DisposableServiceWrapper(service, _requiresDisposal.Enqueue));
     }
 
-    private OldServiceInfo DoCreateOldServiceInfo(IReferenceCountedDisposable<DisposableServiceWrapper> reference, TConfigType config)
+    private OldServiceInfo DoCreateOldServiceInfo(IReferenceCountedDisposable<DisposableServiceWrapper> reference, TOptionsType config)
     {
-        return new OldServiceInfo
-        {
-            Reference = reference.AddWeakReference(),
-            TimeSwapped = _timeProvider.GetUtcNow(),
-            Config = config
-        };
+        return new OldServiceInfo(reference: reference.AddWeakReference(), timeSwapped: DateTimeOffset.UtcNow, config: config);
     }
 
     internal class OldServiceInfo
     {
-        public required DateTimeOffset TimeSwapped { get; init; }
-        public required TConfigType Config { get; init; }
-        public required IWeakReferenceCountedDisposable<DisposableServiceWrapper> Reference { get; init; }
+        public OldServiceInfo(IWeakReferenceCountedDisposable<DisposableServiceWrapper> reference, DateTimeOffset timeSwapped, TOptionsType config)
+        {
+            Reference = reference;
+            TimeSwapped = timeSwapped;
+            Config = config;
+        }
+
+        public DateTimeOffset TimeSwapped { get; }
+        public TOptionsType Config { get; }
+        public IWeakReferenceCountedDisposable<DisposableServiceWrapper> Reference { get; }
         public bool Lingering { get; set; }
     }
 
-    private sealed class NitoReferenceCountedDisposableConfigurationScopedServiceScopeWrapper : IConfigurationScopedServiceScope<TServiceType>
+    private sealed class ConfigurationScopedServiceScope : IConfigurationScopedServiceScope<TServiceType>
     {
         private readonly IReferenceCountedDisposable<DisposableServiceWrapper> _reference;
 
@@ -187,12 +190,16 @@ internal abstract class ConfigurationScopedServiceScopeProvider<TConfigType, TSe
         {
             get
             {
-                ArgumentNullException.ThrowIfNull(_reference.Target);
+                if (_reference.Target is null)
+                {
+                    throw new ArgumentNullException(nameof(_reference.Target), "This should never happen. Report this as a bug!");
+                }
+
                 return _reference.Target.Service;
             }
         }
 
-        public NitoReferenceCountedDisposableConfigurationScopedServiceScopeWrapper(IReferenceCountedDisposable<DisposableServiceWrapper> reference)
+        public ConfigurationScopedServiceScope(IReferenceCountedDisposable<DisposableServiceWrapper> reference)
         {
             _reference = reference;
         }
