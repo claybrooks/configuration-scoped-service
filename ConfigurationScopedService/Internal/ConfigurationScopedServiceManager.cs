@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using Nito.AsyncEx;
 using Nito.Disposables;
 
 namespace ConfigurationScopedService.Internal;
@@ -8,6 +9,8 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
     where TOptionsType : class
     where TServiceType : class
 {
+    private readonly string _optionsType;
+    private readonly string? _optionsName;
     private readonly ConfigurationScopeRuntimeOptions _runtimeOptions;
 
     private readonly ILogger _logger;
@@ -17,6 +20,8 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _backgroundTask;
 
+    private readonly AsyncManualResetEvent _serviceAvailableEvent;
+
     private TOptionsType _currentOptions;
     private IReferenceCountedDisposable<DisposableServiceWrapper> _refCountedService;
 
@@ -25,16 +30,29 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
 
     private readonly List<OldServiceInfo> _servicesWaitingForPhaseOut = [];
 
-    protected ConfigurationScopedServiceManager(ConfigurationScopeRuntimeOptions runtimeOptions, TOptionsType initialOptions, IServiceFactory<TOptionsType, TServiceType> serviceFactory, ILogger logger)
+    protected ConfigurationScopedServiceManager(string? optionsName, ConfigurationScopeRuntimeOptions runtimeOptions, TOptionsType initialOptions, IServiceFactory<TOptionsType, TServiceType> serviceFactory, ILogger logger)
     {
+        var options_type = typeof(TOptionsType);
+        var equatable_type = typeof(IEquatable<TOptionsType>);
+
+        _optionsType = options_type.Name;
+        _optionsName = optionsName;
         _logger = logger;
         _serviceFactory = serviceFactory;
         _runtimeOptions = runtimeOptions;
         _currentOptions = initialOptions;
 
+        if (!equatable_type.IsAssignableFrom(options_type))
+        {
+            _logger.LogWarning($"{options_type} does not implement IEquatable<{options_type.Name}>. It is highly recommended to implement IEquatable<{options_type.Name}> on {options_type.Name} to combat duplicate and unnecessary IOptionsMonitor change notifications.");
+        }
+
         var service = serviceFactory.Create(_currentOptions);
 
         _refCountedService = DoCreateRefCountedServiceWrapper(service);
+
+        // Start in a set state so that we can immediately serve the current service
+        _serviceAvailableEvent = new AsyncManualResetEvent(true);
 
         _backgroundTask = Task.Factory.StartNew(async () =>
         {
@@ -53,16 +71,44 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
         _incomingOptionsChanges.Enqueue(options);
     }
 
-    public IConfigurationScopedServiceScope<TServiceType> Create() => new ConfigurationScopedServiceScope(_refCountedService.AddReference());
+    public async Task<IConfigurationScopedServiceScope<TServiceType>> CreateAsync(CancellationToken cancellationToken)
+    {
+        await _serviceAvailableEvent.WaitAsync(cancellationToken);
+        return new ConfigurationScopedServiceScope(_refCountedService.AddReference());
+    }
+
+    public IConfigurationScopedServiceScope<TServiceType> Create(CancellationToken cancellationToken)
+    {
+        _serviceAvailableEvent.Wait(cancellationToken);
+        return new ConfigurationScopedServiceScope(_refCountedService.AddReference());
+    }
 
     protected virtual async ValueTask DisposeCoreAsync()
     {
-        _cts.Cancel();
+        try
+        {
+            _cts.Cancel();
+        }
+        catch
+        {
+            // Best effort cancellation
+        }
+
         await _backgroundTask.ConfigureAwait(false);
+        
         _cts.Dispose();
 
-        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(_refCountedService, _currentOptions));
-        _refCountedService.Dispose();
+        try
+        {
+            _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(_refCountedService, _currentOptions));
+            _refCountedService.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // This is ok. If we are here after an app crash this may already be disposed.
+        }
+
+        // If we were already disposed above, the next few lines are no-ops
         DoManageServicesWaitingForDispose();
         await DoDisposeOfServicesAsync().ConfigureAwait(false);
 
@@ -86,16 +132,57 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            var config = DoFlushConfigQueueAndReturnLast();
+            TOptionsType? options = null;
 
-            if (config is not null)
+            // If we are not blocking on swap, always flush the queue
+            // If we are blocking on swap, only consume configuration events if our event is set
+            // If we are in an unset state, it means we are waiting for all service scopes to end before swapping the
+            // new service instance in.  Just let the configs stay queued until the service swap is complete
+            if (!_runtimeOptions.BlockOnSwap || _serviceAvailableEvent.IsSet)
             {
-                var service = _serviceFactory.Create(config);
-                DoServiceSwap(service, config);
+                options = DoFlushConfigQueueAndReturnLast();
+            }
+            
+            // Check to make sure the new options value is different before proceeding
+            if (options is not null && !options.Equals(_currentOptions))
+            {
+                _logger.LogInformation($"Configuration change detected for options instance {_optionsName} of type {_optionsType}");
+                // If we are blocking on swap, it means we need to wait for all service scopes to end before we can
+                // swap in.  So we just decrement our internal ref counter and do the swap in the phase-out method
+                if (_runtimeOptions.BlockOnSwap)
+                {
+                    _serviceAvailableEvent.Reset();
+                    DoPhaseOutCurrentService(options);
+                }
+                // We are not blocking on swap, so we can just swap in the new service
+                else
+                {
+                    DoNonBlockingServiceSwap(options);
+                }
             }
 
             DoManageServicesWaitingForDispose();
             await DoDisposeOfServicesAsync().ConfigureAwait(false);
+
+            // If we are blocking on swap and we are in an unset state, we need to create the new service when the old
+            // is disposed of.  This occurs when our _refCountedService.IsDisposed flag is true
+            if (_runtimeOptions.BlockOnSwap && !_serviceAvailableEvent.IsSet && _servicesWaitingForPhaseOut.Count == 0)
+            {
+                try
+                {
+                    DoSwapInNewService(_currentOptions);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error creating service instance");
+                    throw;
+                }
+                finally
+                {
+                    _serviceAvailableEvent.Set();
+                }
+            }
+
             await Task.Delay(100, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -112,16 +199,39 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
         return config;
     }
 
-    private void DoServiceSwap(TServiceType service, TOptionsType config)
+    private void DoPhaseOutCurrentService(TOptionsType config)
+    {
+        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(_refCountedService, _currentOptions));
+        _refCountedService.Dispose();
+        _currentOptions = config;
+    }
+
+    private void DoSwapInNewService(TOptionsType config)
+    {
+        var service = _serviceFactory.Create(config);
+        _refCountedService = DoCreateRefCountedServiceWrapper(service);
+    }
+
+    private void DoNonBlockingServiceSwap(TOptionsType config)
     {
         var previous_ref_counted_service = _refCountedService;
 
-        _refCountedService = DoCreateRefCountedServiceWrapper(service);
-
-        _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(previous_ref_counted_service, _currentOptions));
-        previous_ref_counted_service.Dispose();
-
-        _currentOptions = config;
+        try
+        {
+            var service = _serviceFactory.Create(config);
+            _refCountedService = DoCreateRefCountedServiceWrapper(service);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating service instance");
+            throw;
+        }
+        finally
+        {
+            _servicesWaitingForPhaseOut.Add(DoCreateOldServiceInfo(previous_ref_counted_service, _currentOptions));
+            previous_ref_counted_service.Dispose();
+            _currentOptions = config;
+        }
     }
 
     private async ValueTask DoDisposeOfServicesAsync()

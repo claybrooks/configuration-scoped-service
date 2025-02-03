@@ -3,16 +3,16 @@ using Microsoft.Extensions.Options;
 
 namespace ConfigurationScopedService.Internal;
 
-internal sealed class OptionsMonitorConfigurationScopedServiceManager<TConfigType, TServiceType> : ConfigurationScopedServiceManager<TConfigType, TServiceType> where TConfigType : class where TServiceType : class
+internal sealed class OptionsMonitorConfigurationScopedServiceManager<TOptions, TServiceType> : ConfigurationScopedServiceManager<TOptions, TServiceType> where TOptions : class where TServiceType : class
 {
     private readonly IDisposable? _changeDisposable;
 
     public OptionsMonitorConfigurationScopedServiceManager(
         string? optionsName,
         ConfigurationScopeRuntimeOptions runtimeOptions,
-        IOptionsMonitor<TConfigType> optionsMonitor,
-        IServiceFactory<TConfigType, TServiceType> serviceFactory,
-        ILogger<OptionsMonitorConfigurationScopedServiceManager<TConfigType, TServiceType>> logger) : base(runtimeOptions, optionsName is null ? optionsMonitor.CurrentValue : optionsMonitor.Get(optionsName), serviceFactory, logger)
+        IOptionsMonitor<TOptions> optionsMonitor,
+        IServiceFactory<TOptions, TServiceType> serviceFactory,
+        ILogger<OptionsMonitorConfigurationScopedServiceManager<TOptions, TServiceType>> logger) : base(optionsName, runtimeOptions, optionsName is null ? optionsMonitor.CurrentValue : optionsMonitor.Get(optionsName), serviceFactory, logger)
     {
         if (optionsName is null)
         {

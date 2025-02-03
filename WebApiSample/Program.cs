@@ -1,4 +1,5 @@
 using ConfigurationScopedService;
+using WebApiSample;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,9 +13,31 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<MyOptions>(MyOptionKeys.Options1, builder.Configuration.GetSection("MyOptions1"));
 builder.Services.Configure<MyOptions>(MyOptionKeys.Options2, builder.Configuration.GetSection("MyOptions2"));
 
+var runtime_options = new ConfigurationScopeRuntimeOptions() { BlockOnSwap = false };
+
+var _throw = false;
 // Each MyService is keyed and gets it's own named options instance
-builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>(MyServiceKeys.Service1, MyOptionKeys.Options1, (sp, key, options) => new MyService(options));
-builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>(MyServiceKeys.Service2, MyOptionKeys.Options2, (sp, key, options) => new MyService(options));
+builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>(MyServiceKeys.Service1, MyOptionKeys.Options1, runtime_options, (sp, key, options) =>
+{
+    if (_throw)
+    {
+        throw new Exception("Ooops");
+    }
+    else
+    {
+        _throw = true;
+        return new MyService(options);
+    }
+});
+builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>(MyServiceKeys.Service2, MyOptionKeys.Options2, runtime_options, (sp, key, options) => new MyService(options));
+
+// Our background service keeps the scope open for 10 seconds.  You can play with the blockonswap flag to see how this
+// affects api calls to the service while the backgroundscope is waiting to be release.
+builder.Services.AddSingleton<IHostedService, MyBackgroundService>(
+    sp => new MyBackgroundService(MyServiceKeys.Service1, sp.GetRequiredKeyedService<IConfigurationScopedServiceScopeFactory<MyService>>(MyServiceKeys.Service1)));
+
+builder.Services.AddSingleton<IHostedService, MyBackgroundService>(
+    sp => new MyBackgroundService(MyServiceKeys.Service2, sp.GetRequiredKeyedService<IConfigurationScopedServiceScopeFactory<MyService>>(MyServiceKeys.Service2)));
 
 var app = builder.Build();
 
@@ -49,10 +72,36 @@ public class MyOptionKeys
     public const string Options2 = nameof(Options2);
 }
 
-public class MyOptions
+//public class MyOptions
+//{
+//    public bool Enabled { get; set; }
+//    public int WorkValue { get; set; }
+//}
+
+public class MyOptions : IEquatable<MyOptions>
 {
     public bool Enabled { get; set; }
     public int WorkValue { get; set; }
+
+    public bool Equals(MyOptions? other)
+    {
+        if (ReferenceEquals(null, other)) return false;
+        if (ReferenceEquals(this, other)) return true;
+        return Enabled == other.Enabled && WorkValue == other.WorkValue;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        if (ReferenceEquals(null, obj)) return false;
+        if (ReferenceEquals(this, obj)) return true;
+        if (obj.GetType() != this.GetType()) return false;
+        return Equals((MyOptions) obj);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Enabled, WorkValue);
+    }
 }
 
 public class MyService

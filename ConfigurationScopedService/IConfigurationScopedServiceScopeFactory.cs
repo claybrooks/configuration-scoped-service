@@ -1,6 +1,7 @@
 ﻿namespace ConfigurationScopedService;
 
-public interface IConfigurationScopedServiceScopeFactory<out TServiceType>
+public interface IConfigurationScopedServiceScopeFactory<TServiceType>
 {
-    IConfigurationScopedServiceScope<TServiceType> Create();
+    Task<IConfigurationScopedServiceScope<TServiceType>> CreateAsync(CancellationToken cancellationToken);
+    IConfigurationScopedServiceScope<TServiceType> Create(CancellationToken cancellationToken);
 }

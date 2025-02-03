@@ -1,4 +1,5 @@
 ﻿using ConfigurationScopedService.Internal;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -265,7 +266,12 @@ public static class ConfigurationScopedServiceExtensions
         services.TryAddScoped(sp =>
         {
             var config_scoped_service = sp.GetRequiredService<IConfigurationScopedServiceScopeFactory<TServiceType>>();
-            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.Create());
+
+            // Try to get the cancellation token from the service provider scope
+            var http_context_accessor = sp.GetService<IHttpContextAccessor>();
+
+            var cancellation_token = http_context_accessor?.HttpContext.RequestAborted ?? CancellationToken.None;
+            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.Create(cancellation_token));
         });
 
         // Allows callers to resolve TServiceType tied directly to the request scope
@@ -298,7 +304,12 @@ public static class ConfigurationScopedServiceExtensions
         services.TryAddKeyedScoped(serviceKey, (sp, k) =>
         {
             var config_scoped_service = sp.GetRequiredKeyedService<IConfigurationScopedServiceScopeFactory<TServiceType>>(k);
-            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.Create());
+
+            // Try to get the cancellation token from the service provider scope
+            var http_context_accessor = sp.GetService<IHttpContextAccessor>();
+
+            var cancellation_token = http_context_accessor?.HttpContext.RequestAborted ?? CancellationToken.None;
+            return new ConfigurationScopeServiceAccessor<TServiceType>(config_scoped_service.Create(cancellation_token));
         });
 
         // Allows callers to resolve TServiceType tied directly to the request scope

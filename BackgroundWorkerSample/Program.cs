@@ -39,7 +39,7 @@ internal class MyBackgroundService : BackgroundService
         {
             stoppingToken.ThrowIfCancellationRequested();
 
-            using (var scope = _scopeFactory.Create())
+            using (var scope = await _scopeFactory.CreateAsync(stoppingToken))
             {
                 var service = scope.Service;
                 if (service.IsEnabled())
@@ -69,10 +69,30 @@ internal class MyOptionKeys
     public const string Options2 = nameof(Options2);
 }
 
-internal class MyOptions
+internal class MyOptions : IEquatable<MyOptions>
 {
-    public bool Enabled { get; set; }
-    public int WorkValue { get; set; }
+    public bool Enabled { get; }
+    public int WorkValue { get; }
+
+    public bool Equals(MyOptions? other)
+    {
+        if (ReferenceEquals(null, other)) return false;
+        if (ReferenceEquals(this, other)) return true;
+        return Enabled == other.Enabled && WorkValue == other.WorkValue;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        if (ReferenceEquals(null, obj)) return false;
+        if (ReferenceEquals(this, obj)) return true;
+        if (obj.GetType() != this.GetType()) return false;
+        return Equals((MyOptions) obj);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Enabled, WorkValue);
+    }
 }
 
 internal class MyService

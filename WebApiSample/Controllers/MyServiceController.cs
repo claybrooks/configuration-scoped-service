@@ -6,7 +6,7 @@ namespace WebApiSample.Controllers;
 [Route("[controller]")]
 public class WeatherForecastController : ControllerBase
 {
-    [HttpGet("Service1Endpiont")]
+    [HttpGet("Service1Endpoint")]
     public Task<int> GetService1([FromKeyedServices(MyServiceKeys.Service1)] MyService myService)
     {
         if (!myService.IsEnabled())
@@ -16,7 +16,7 @@ public class WeatherForecastController : ControllerBase
         return Task.FromResult(myService.DoWork());
     }
 
-    [HttpGet("Service2Endpiont")]
+    [HttpGet("Service2Endpoint")]
     public Task<int> GetService2([FromKeyedServices(MyServiceKeys.Service2)] MyService myService)
     {
         if (!myService.IsEnabled())
