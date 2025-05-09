@@ -1,3 +1,5 @@
+[Nuget Package](https://www.nuget.org/packages/ConfigurationScopedService)
+
 # Rationale
 
 This library provides a safe reload mechanism in response to configuration changes. It is designed to work around the
