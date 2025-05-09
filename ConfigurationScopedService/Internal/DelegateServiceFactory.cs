@@ -1,4 +1,4 @@
-﻿namespace ConfigurationScopedService.Internal;
+﻿namespace MBL.ConfigurationScopedService.Internal;
 
 internal sealed class DelegateServiceFactory<TConfigType, TServiceType> : IServiceFactory<TConfigType, TServiceType> where TConfigType : class where TServiceType : class
 {

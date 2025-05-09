@@ -1,4 +1,5 @@
-﻿using ConfigurationScopedService;
+﻿using BackgroundWorkerSample;
+using MBL.ConfigurationScopedService;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -22,100 +23,103 @@ host.Services.AddSingleton<IHostedService, MyBackgroundService>(
 var app = host.Build();
 await app.RunAsync();
 
-internal class MyBackgroundService : BackgroundService
+namespace BackgroundWorkerSample
 {
-    private readonly string _serviceKey;
-    private readonly IConfigurationScopedServiceScopeFactory<MyService> _scopeFactory;
-
-    public MyBackgroundService(string serviceKey, IConfigurationScopedServiceScopeFactory<MyService> scopeFactory)
+    internal class MyBackgroundService : BackgroundService
     {
-        _serviceKey = serviceKey;
-        _scopeFactory = scopeFactory;
+        private readonly string _serviceKey;
+        private readonly IConfigurationScopedServiceScopeFactory<MyService> _scopeFactory;
+
+        public MyBackgroundService(string serviceKey, IConfigurationScopedServiceScopeFactory<MyService> scopeFactory)
+        {
+            _serviceKey = serviceKey;
+            _scopeFactory = scopeFactory;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            while (true)
+            {
+                stoppingToken.ThrowIfCancellationRequested();
+
+                using (var scope = await _scopeFactory.CreateAsync(stoppingToken))
+                {
+                    var service = scope.Service;
+                    if (service.IsEnabled())
+                    {
+                        Console.WriteLine($"{_serviceKey} Work value: {service.DoWork()}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_serviceKey} Disabled");
+                    }
+                }
+
+                await Task.Delay(1000, stoppingToken).ConfigureAwait(false);
+            }
+        }
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    internal class MyServiceKeys
     {
-        while (true)
-        {
-            stoppingToken.ThrowIfCancellationRequested();
+        public const string Service1 = nameof(Service1);
+        public const string Service2 = nameof(Service2);
+    }
 
-            using (var scope = await _scopeFactory.CreateAsync(stoppingToken))
+    internal class MyOptionKeys
+    {
+        public const string Options1 = nameof(Options1);
+        public const string Options2 = nameof(Options2);
+    }
+
+    internal class MyOptions : IEquatable<MyOptions>
+    {
+        public bool Enabled { get; }
+        public int WorkValue { get; }
+
+        public bool Equals(MyOptions? other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Enabled == other.Enabled && WorkValue == other.WorkValue;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((MyOptions) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Enabled, WorkValue);
+        }
+    }
+
+    internal class MyService
+    {
+        private readonly MyOptions _options;
+
+        public MyService(MyOptions options)
+        {
+            _options = options;
+        }
+
+        public bool IsEnabled()
+        {
+            return _options.Enabled;
+        }
+
+        public int DoWork()
+        {
+            if (!IsEnabled())
             {
-                var service = scope.Service;
-                if (service.IsEnabled())
-                {
-                    Console.WriteLine($"{_serviceKey} Work value: {service.DoWork()}");
-                }
-                else
-                {
-                    Console.WriteLine($"{_serviceKey} Disabled");
-                }
+                throw new InvalidOperationException("Service is not enabled");
             }
 
-            await Task.Delay(1000, stoppingToken).ConfigureAwait(false);
+            return _options.WorkValue;
         }
-    }
-}
-
-internal class MyServiceKeys
-{
-    public const string Service1 = nameof(Service1);
-    public const string Service2 = nameof(Service2);
-}
-
-internal class MyOptionKeys
-{
-    public const string Options1 = nameof(Options1);
-    public const string Options2 = nameof(Options2);
-}
-
-internal class MyOptions : IEquatable<MyOptions>
-{
-    public bool Enabled { get; }
-    public int WorkValue { get; }
-
-    public bool Equals(MyOptions? other)
-    {
-        if (ReferenceEquals(null, other)) return false;
-        if (ReferenceEquals(this, other)) return true;
-        return Enabled == other.Enabled && WorkValue == other.WorkValue;
-    }
-
-    public override bool Equals(object? obj)
-    {
-        if (ReferenceEquals(null, obj)) return false;
-        if (ReferenceEquals(this, obj)) return true;
-        if (obj.GetType() != this.GetType()) return false;
-        return Equals((MyOptions) obj);
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(Enabled, WorkValue);
-    }
-}
-
-internal class MyService
-{
-    private readonly MyOptions _options;
-
-    public MyService(MyOptions options)
-    {
-        _options = options;
-    }
-
-    public bool IsEnabled()
-    {
-        return _options.Enabled;
-    }
-
-    public int DoWork()
-    {
-        if (!IsEnabled())
-        {
-            throw new InvalidOperationException("Service is not enabled");
-        }
-
-        return _options.WorkValue;
     }
 }

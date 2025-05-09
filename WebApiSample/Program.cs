@@ -1,4 +1,4 @@
-using ConfigurationScopedService;
+using MBL.ConfigurationScopedService;
 using WebApiSample;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -60,17 +60,19 @@ app.MapControllers();
 
 app.Run();
 
-public class MyServiceKeys
+namespace WebApiSample
 {
-    public const string Service1 = nameof(Service1);
-    public const string Service2 = nameof(Service2);
-}
+    public class MyServiceKeys
+    {
+        public const string Service1 = nameof(Service1);
+        public const string Service2 = nameof(Service2);
+    }
 
-public class MyOptionKeys
-{
-    public const string Options1 = nameof(Options1);
-    public const string Options2 = nameof(Options2);
-}
+    public class MyOptionKeys
+    {
+        public const string Options1 = nameof(Options1);
+        public const string Options2 = nameof(Options2);
+    }
 
 //public class MyOptions
 //{
@@ -78,53 +80,54 @@ public class MyOptionKeys
 //    public int WorkValue { get; set; }
 //}
 
-public class MyOptions : IEquatable<MyOptions>
-{
-    public bool Enabled { get; set; }
-    public int WorkValue { get; set; }
-
-    public bool Equals(MyOptions? other)
+    public class MyOptions : IEquatable<MyOptions>
     {
-        if (ReferenceEquals(null, other)) return false;
-        if (ReferenceEquals(this, other)) return true;
-        return Enabled == other.Enabled && WorkValue == other.WorkValue;
-    }
+        public bool Enabled { get; set; }
+        public int WorkValue { get; set; }
 
-    public override bool Equals(object? obj)
-    {
-        if (ReferenceEquals(null, obj)) return false;
-        if (ReferenceEquals(this, obj)) return true;
-        if (obj.GetType() != this.GetType()) return false;
-        return Equals((MyOptions) obj);
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(Enabled, WorkValue);
-    }
-}
-
-public class MyService
-{
-    private readonly MyOptions _options;
-
-    public MyService(MyOptions options)
-    {
-        _options = options;
-    }
-
-    public bool IsEnabled()
-    {
-        return _options.Enabled;
-    }
-
-    public int DoWork()
-    {
-        if (!IsEnabled())
+        public bool Equals(MyOptions? other)
         {
-            throw new InvalidOperationException("Service is not enabled");
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Enabled == other.Enabled && WorkValue == other.WorkValue;
         }
 
-        return _options.WorkValue;
+        public override bool Equals(object? obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((MyOptions) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Enabled, WorkValue);
+        }
+    }
+
+    public class MyService
+    {
+        private readonly MyOptions _options;
+
+        public MyService(MyOptions options)
+        {
+            _options = options;
+        }
+
+        public bool IsEnabled()
+        {
+            return _options.Enabled;
+        }
+
+        public int DoWork()
+        {
+            if (!IsEnabled())
+            {
+                throw new InvalidOperationException("Service is not enabled");
+            }
+
+            return _options.WorkValue;
+        }
     }
 }

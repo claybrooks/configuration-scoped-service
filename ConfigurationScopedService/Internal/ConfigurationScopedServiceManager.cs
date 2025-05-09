@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
 using Nito.Disposables;
 
-namespace ConfigurationScopedService.Internal;
+namespace MBL.ConfigurationScopedService.Internal;
 
 internal abstract class ConfigurationScopedServiceManager<TOptionsType, TServiceType> : IConfigurationScopedServiceScopeFactory<TServiceType>, IOptionsChangeConsumer<TOptionsType>, IAsyncDisposable 
     where TOptionsType : class

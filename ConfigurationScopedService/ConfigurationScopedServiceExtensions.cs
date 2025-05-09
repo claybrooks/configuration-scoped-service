@@ -1,11 +1,11 @@
-﻿using ConfigurationScopedService.Internal;
+﻿using MBL.ConfigurationScopedService.Internal;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace ConfigurationScopedService;
+namespace MBL.ConfigurationScopedService;
 
 public static class ConfigurationScopedServiceExtensions
 {
@@ -16,7 +16,7 @@ public static class ConfigurationScopedServiceExtensions
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType>(this IServiceCollection services, Func<IServiceProvider, TOptionsType, TServiceType> factory)
         where TOptionsType : class
         where TServiceType : class
-        => services.AddConfigurationScoped<TOptionsType, TServiceType>(null, new ConfigurationScopeRuntimeOptions(), factory);
+        => services.AddConfigurationScoped(null, new ConfigurationScopeRuntimeOptions(), factory);
 
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, Func<IServiceProvider, TOptionsType, TImplementationType> factory)
         where TOptionsType : class
@@ -42,7 +42,7 @@ public static class ConfigurationScopedServiceExtensions
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType>(this IServiceCollection services, ConfigurationScopeRuntimeOptions options, Func<IServiceProvider, TOptionsType, TServiceType> factory)
         where TOptionsType : class
         where TServiceType : class
-        => services.AddConfigurationScoped<TOptionsType, TServiceType>(null, options, factory);
+        => services.AddConfigurationScoped(null, options, factory);
 
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, ConfigurationScopeRuntimeOptions options, Func<IServiceProvider, TOptionsType, TImplementationType> factory)
         where TOptionsType : class
@@ -68,7 +68,7 @@ public static class ConfigurationScopedServiceExtensions
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType>(this IServiceCollection services, string? optionsName, Func<IServiceProvider, TOptionsType, TServiceType> factory)
         where TOptionsType : class
         where TServiceType : class
-        => services.AddConfigurationScoped<TOptionsType, TServiceType>(optionsName, new ConfigurationScopeRuntimeOptions(), factory);
+        => services.AddConfigurationScoped(optionsName, new ConfigurationScopeRuntimeOptions(), factory);
 
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, string? optionsName, Func<IServiceProvider, TOptionsType, TImplementationType> factory)
         where TOptionsType : class
@@ -95,7 +95,7 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class
         where TServiceType : class
     {
-        return services.DoAddConfigurationScoped<TOptionsType, TServiceType>(optionsName, options, sp => new DelegateServiceFactory<TOptionsType, TServiceType>(sp, factory));
+        return services.DoAddConfigurationScoped(optionsName, options, sp => new DelegateServiceFactory<TOptionsType, TServiceType>(sp, factory));
     }
 
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, string? optionsName, ConfigurationScopeRuntimeOptions options, Func<IServiceProvider, TOptionsType, TImplementationType> factory)
@@ -110,7 +110,7 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class
         where TServiceType : class
     {
-        return services.DoAddConfigurationScoped<TOptionsType, TServiceType>(optionsName, options, sp => new ActivatorUtilitiesServiceFactory<TOptionsType, TServiceType>(sp));
+        return services.DoAddConfigurationScoped(optionsName, options, sp => new ActivatorUtilitiesServiceFactory<TOptionsType, TServiceType>(sp));
     }
 
     public static IServiceCollection AddConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, string? optionsName, ConfigurationScopeRuntimeOptions options)
@@ -132,7 +132,7 @@ public static class ConfigurationScopedServiceExtensions
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType>(this IServiceCollection services, object? serviceKey, Func<IServiceProvider, object?, TOptionsType, TServiceType> factory)
         where TOptionsType : class
         where TServiceType : class
-        => services.AddKeyedConfigurationScoped<TOptionsType, TServiceType>(serviceKey, null, new ConfigurationScopeRuntimeOptions(), factory);
+        => services.AddKeyedConfigurationScoped(serviceKey, null, new ConfigurationScopeRuntimeOptions(), factory);
 
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, object? serviceKey, Func<IServiceProvider, object?, TOptionsType, TImplementationType> factory)
         where TOptionsType : class
@@ -158,7 +158,7 @@ public static class ConfigurationScopedServiceExtensions
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType>(this IServiceCollection services, object? serviceKey, ConfigurationScopeRuntimeOptions options, Func<IServiceProvider, object?, TOptionsType, TServiceType> factory)
         where TOptionsType : class
         where TServiceType : class
-        => services.AddKeyedConfigurationScoped<TOptionsType, TServiceType>(serviceKey, null, options, factory);
+        => services.AddKeyedConfigurationScoped(serviceKey, null, options, factory);
 
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, object? serviceKey, ConfigurationScopeRuntimeOptions options, Func<IServiceProvider, object?, TOptionsType, TImplementationType> factory)
         where TOptionsType : class
@@ -184,7 +184,7 @@ public static class ConfigurationScopedServiceExtensions
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType>(this IServiceCollection services, object? serviceKey, string? optionsName, Func<IServiceProvider, object?, TOptionsType, TServiceType> factory)
         where TOptionsType : class
         where TServiceType : class
-        => services.AddKeyedConfigurationScoped<TOptionsType, TServiceType>(serviceKey, optionsName, new ConfigurationScopeRuntimeOptions(), factory);
+        => services.AddKeyedConfigurationScoped(serviceKey, optionsName, new ConfigurationScopeRuntimeOptions(), factory);
 
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, object? serviceKey, string? optionsName, Func<IServiceProvider, object?, TOptionsType, TImplementationType> factory)
         where TOptionsType : class
@@ -211,7 +211,7 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class
         where TServiceType : class
     {
-        return services.DoAddKeyedConfigurationScoped<TOptionsType, TServiceType>(serviceKey, optionsName, options, (sp, k) => new DelegateKeyedServiceFactory<TOptionsType, TServiceType>(sp, k, factory));
+        return services.DoAddKeyedConfigurationScoped(serviceKey, optionsName, options, (sp, k) => new DelegateKeyedServiceFactory<TOptionsType, TServiceType>(sp, k, factory));
     }
 
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, object? serviceKey, string? optionsName, ConfigurationScopeRuntimeOptions options, Func<IServiceProvider, object?, TOptionsType, TImplementationType> factory)
@@ -226,7 +226,7 @@ public static class ConfigurationScopedServiceExtensions
         where TOptionsType : class
         where TServiceType : class
     {
-        return services.DoAddKeyedConfigurationScoped<TOptionsType, TServiceType>(serviceKey, optionsName, options, (sp, _) => new ActivatorUtilitiesServiceFactory<TOptionsType, TServiceType>(sp));
+        return services.DoAddKeyedConfigurationScoped(serviceKey, optionsName, options, (sp, _) => new ActivatorUtilitiesServiceFactory<TOptionsType, TServiceType>(sp));
     }
 
     public static IServiceCollection AddKeyedConfigurationScoped<TOptionsType, TServiceType, TImplementationType>(this IServiceCollection services, object? serviceKey, string? optionsName, ConfigurationScopeRuntimeOptions options)

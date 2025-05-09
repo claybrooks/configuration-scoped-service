@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace ConfigurationScopedService.Internal;
+namespace MBL.ConfigurationScopedService.Internal;
 
 internal sealed class ActivatorUtilitiesServiceFactory<TConfigType, TServiceType> : IServiceFactory<TConfigType, TServiceType> where TConfigType : class where TServiceType : class
 {

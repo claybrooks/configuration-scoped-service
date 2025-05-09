@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace ConfigurationScopedService.Internal;
+namespace MBL.ConfigurationScopedService.Internal;
 
 internal sealed class OptionsMonitorConfigurationScopedServiceManager<TOptions, TServiceType> : ConfigurationScopedServiceManager<TOptions, TServiceType> where TOptions : class where TServiceType : class
 {

@@ -1,4 +1,4 @@
-﻿namespace ConfigurationScopedService.Internal;
+﻿namespace MBL.ConfigurationScopedService.Internal;
 
 internal sealed class ConfigurationScopeServiceAccessor<TServiceType> : IDisposable
 {

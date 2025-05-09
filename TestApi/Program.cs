@@ -1,5 +1,5 @@
-using ConfigurationScopedService;
-using TestApi.Controllers;
+using IOptionsMonitorSample.Controllers;
+using MBL.ConfigurationScopedService;
 
 var builder = WebApplication.CreateBuilder(args);
 

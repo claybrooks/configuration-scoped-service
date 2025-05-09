@@ -1,4 +1,4 @@
-﻿using ConfigurationScopedService;
+﻿using MBL.ConfigurationScopedService;
 
 namespace WebApiSample;
 

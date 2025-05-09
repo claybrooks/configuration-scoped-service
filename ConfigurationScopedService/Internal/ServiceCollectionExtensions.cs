@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace ConfigurationScopedService.Internal;
+namespace MBL.ConfigurationScopedService.Internal;
 
 internal static class ServiceCollectionExtensions
 {

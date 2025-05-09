@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
-namespace TestApi.Controllers;
+namespace IOptionsMonitorSample.Controllers;
 
 public class MyOptions
 {

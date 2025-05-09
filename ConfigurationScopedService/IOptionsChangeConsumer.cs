@@ -1,4 +1,4 @@
-﻿namespace ConfigurationScopedService;
+﻿namespace MBL.ConfigurationScopedService;
 
 public interface IOptionsChangeConsumer<in TOptionsType>
 {
