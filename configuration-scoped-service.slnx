@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/Samples/">
+    <Project Path="BackgroundWorkerSample/BackgroundWorkerSample.csproj" />
+    <Project Path="TestApi/IOptionsMonitorSample.csproj" />
+    <Project Path="WebApiSample/WebApiSample.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="ConfigurationScopedService/ConfigurationScopedService.csproj" />
+</Solution>

@@ -223,7 +223,15 @@ internal abstract class ConfigurationScopedServiceManager<TOptionsType, TService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating service instance");
+            if (_optionsName is null)
+            {
+                _logger.LogError(ex, "Error creating service instance for options type {optionsType}", _optionsType);
+            }
+            else
+            {
+                _logger.LogError(ex, "Error creating service instance for options type {optionsType} with name {optionsName}", _optionsType, _optionsName);
+            }
+
             throw;
         }
         finally
