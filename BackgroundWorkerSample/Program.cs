@@ -45,14 +45,9 @@ namespace BackgroundWorkerSample
                 using (var scope = await _scopeFactory.CreateAsync(stoppingToken))
                 {
                     var service = scope.Service;
-                    if (service.IsEnabled())
-                    {
-                        Console.WriteLine($"{_serviceKey} Work value: {service.DoWork()}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"{_serviceKey} Disabled");
-                    }
+                    Console.WriteLine(service.IsEnabled() ? 
+                        $"{_serviceKey} Work value: {service.DoWork()}" : 
+                        $"{_serviceKey} Disabled");
                 }
 
                 await Task.Delay(1000, stoppingToken).ConfigureAwait(false);

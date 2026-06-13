@@ -1,11 +1,5 @@
 ﻿namespace MBL.ConfigurationScopedService;
 
-public enum SwapStrategies
-{
-    Block,
-    NoBlock,
-}
-
 public class ConfigurationScopeRuntimeOptions
 {
     /// <summary>
