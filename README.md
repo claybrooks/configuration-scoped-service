@@ -1,95 +1,90 @@
-[Nuget Package](https://www.nuget.org/packages/ConfigurationScopedService)
+# ConfigurationScopedService
 
-# Rationale
+[![Nuget](https://img.shields.io/nuget/v/ConfigurationScopedService)](https://www.nuget.org/packages/ConfigurationScopedService)
+![.NET Version](https://img.shields.io/badge/.NET-Standard2.0-blue)
 
-This library provides a safe reload mechanism in response to configuration changes. It is designed to work around the
-concurrency issues introduced by the default `IOptionsMonitor` implementation.  See the bottom of the readme for more
-information on why `IOptionsMonitor` is  potentially unsafe as a live reload trigger.
+A thread-safe, automated live-reload mechanism for .NET services in response to configuration changes. 
 
-This library lifts the logic for live service reloading in a re-useable and generic manner. Code executing in a
-highly concurrent environment is hard enough to write as is, let me help you alleviate some of the pain by automating
-your live service reloading :)
+## 💡 Rationale
 
-This library is of the opinion services should be reconstructed in response to configuration changes rather than
-managing configuration changes internally in the service code. Reconstructing externally has the following advantages:
- 1. Reconstruction code is generic and re-useable. Any service you write can take advantage of it.
- 2. Services can be written with the assumption that initial conditions are immutable. This is a **great thing**.
- 3. Service logic related to resource re-initialization can be deleted. Just dispose of things in your service as if its lifetime was coming to a natural end.
- 4. Remove usages of IOptions/IOptionsSnapshot/IOptionsMonitor in your services. This allows you to reuse the service code in non-ASP.NET Core projects.
+This library solves the concurrency and data-race issues introduced by the default `IOptionsMonitor` implementation. (See [Why IOptionsMonitor is Potentially Unsafe](#why-is-ioptionsmonitor-potentially-unsafe-as-a-reload-trigger) below).
 
-## Introduction
-This library adds a new service scope for our convenience: ConfigurationScoped.  A service that is ConfigurationScoped
-has it's lifetime tied to the lifetime of a specific configuration section. If the configuration section data never
-changes during the lifetime of the app, the service is effectively a singleton. If the configuration section data
-changes, a new instance of the service is constructed and made available for use. You can think of the lifetime of
-ConfigurationScoped as not longer than Singleton but greater than Scoped.
+Writing reliable code in highly concurrent environments is difficult. `ConfigurationScopedService` alleviates this pain by automating live service reloading using an architectural pattern: **services should be completely reconstructed when configuration changes, rather than managing state changes internally.**
 
-This library uses a ref-counting mechanism to know if a service is being actively used. When a configuration change 
-occurs, a new version of the service will be created and the old one will phase out when it's ref-count reaches 0. The 
-ref-count reaches 0 when all active scopes for that service instance have been destroyed.
+### Key Advantages
+* **Generic & Reusable:** The reload logic is decoupled from your business logic.
+* **Immutable State:** Services are written with the guarantee that initial conditions never change mid-execution.
+* **Cleaner Code:** No need for complex resource re-initialization logic. Just dispose of assets naturally in your `Dispose` method.
+* **Fewer Dependencies:** Removes the need to inject `IOptions`, `IOptionsSnapshot`, or `IOptionsMonitor` into your service logic.
 
-There are two modes of service swapping when a configuration change is encountered, blocking and non blocking. Non
-blocking is the default and is recommended for most use cases.
+---
 
-In non blocking mode, the following occurs during a configuration change:
- 1. A new instance of the service is created
- 2. The new service is swapped in and the old service ref-count is decremented
- 3. If the old service ref-count is 0, it is disposed of and removed
- 4. If the old service ref-count is greater than 0, it will be disposed of at a later time when its ref-count reaches 0
+## 🚀 Introduction
 
-In blocking mode, the following occurs during a configuration change:
- 1. Incoming service scope requests block
- 2. All active service scopes are waited on to end (ref-count reaches 0)
- 3. The old service is disposed of and removed
- 4. A new instance of the service is created and swapped in
- 5. Scope requests are completed with the new service instance
+This library introduces a new service lifetime scope: **ConfigurationScoped**. 
 
-Pros/Cons of non blocking mode:
- - (Pro) Service swapping is immediate
- - (Pro) New service scope requests immediately get the new service
- - (Pro) Old service scopes remain untouched and will continue to safely resolve the old instance of the service
- - (Con) Multiple service instances can live at the same time
+The lifetime of a `ConfigurationScoped` service is bound to a specific configuration section:
+* **No changes:** The service behaves effectively as a **Singleton**.
+* **Configuration changes:** A new instance of the service is constructed and made available for all future resolutions.
 
-Pros/Cons of blocking mode:
- - (Pro) Strong guarantee that only one service instance is alive at a time
- - (Con) Service scopes that are slow to end will hold up any new service scope requests (api requests that rely on the new service will block)
- - (Con) New service scope requests will block indefinitely until all active scopes end
+### Reference Counting
+The library tracks active service usage via a reference-counting mechanism. When configuration updates, a new version of the service is instantly swapped in. The old version phases out and is automatically disposed of once its reference count hits zero (meaning all active scopes using it have finished).
+
+### Swapping Modes
+You can configure how services swap when a configuration change is detected:
+
+#### 1. Non-Blocking (Default & Recommended)
+1. A new service instance is initialized.
+2. The new service is swapped in; the old instance's reference count decrements.
+3. If the old instance's count hits 0, it is immediately disposed.
+4. If the count is > 0, it is safely disposed later when active scopes finish.
+
+* 👍 **Pros:** Swapping is immediate. New requests instantly get the updated service. Existing scopes safely finish using the old service.
+* 👎 **Cons:** Multiple instances of the service can temporarily co-exist in memory during the transition.
+
+#### 2. Blocking
+1. Incoming service scope requests are paused/blocked.
+2. The engine waits for all active service scopes using the old instance to finish.
+3. The old service is disposed.
+4. A new service instance is initialized and unblocks incoming requests.
+
+* 👍 **Pros:** Guarantees that exactly one instance of the service is alive at any given moment.
+* 👎 **Cons:** Slow-running scopes will stall new requests, causing latency or timeouts in downstream systems like APIs.
+
+---
+
+## 🛠️ Installation & Registration
 
 ### IServiceCollection Registration
-Service registration follows the general IServiceCollection registration pattern.  It supports both keyed and non-keyed
-registrations as well named and unnamed options instances.
+Registration follows standard .NET patterns and fully supports standard, named, and keyed options/services.
 
 ```csharp
 // Program.cs
 
-// Register against an unnamed options instance
+// 1. Unnamed options instance
 builder.Services.Configure<MyOptions>(builder.Configuration.GetSection("MyOptions"));
 builder.Services.AddConfigurationScoped<MyOptions, MyService>((sp, options) => new MyService(options));
 
-// Register against a named options instance
+// 2. Named options instance
 builder.Services.Configure<MyOptions>("Options1", builder.Configuration.GetSection("MyOptions"));
 builder.Services.AddConfigurationScoped<MyOptions, MyService>("Options1", (sp, options) => new MyService(options));
 
-// Register keyed
+// 3. Keyed service registration
 builder.Services.Configure<MyOptions>("Options1", builder.Configuration.GetSection("MyOptions1"));
 builder.Services.Configure<MyOptions>("Options2", builder.Configuration.GetSection("MyOptions2"));
+
 builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>("Options1", "ServiceKey1", (sp, key, options) => new MyService(options));
 builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>("Options2", "ServiceKey2", (sp, key, options) => new MyService(options));
-
 ```
 
-### Usage In Controllers
-Internally, the service type is registered as scoped and will be resolved automagically in an active request scope.
-The ref-count of the current service instance is incremented and decremented with the lifetime of the request scope
-(incremented on request scope start and decremented on request scope end).
+---
+
+## 💻 Usage Examples
+
+### 1. In Controllers
+The service type is registered as scoped internally. It resolves automatically within an active HTTP request scope. Reference counts increment when the request starts and decrement when the request ends.
 
 ```csharp
-// Program.cs
-builder.Services.Configure<MyOptions>("OptionsKey", builder.Configuration.GetSection("MyOptions"));
-builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>("ServiceKey", "OptionsKey", (sp, key, options) => new MyService(options));
-
-...
-
 // MyServiceController.cs
 [ApiController]
 [Route("[controller]")]
@@ -97,7 +92,7 @@ public class MyServiceController : ControllerBase
 {
     private readonly MyService _myService;
 
-    // Behind the scenes, MyService was resolved via IConfigurationScopedServiceScopeFactory<MyService>().Create().Service
+    // Resolved automatically behind the scenes via IConfigurationScopedServiceScopeFactory
     public MyServiceController(MyService myService)
     {
         _myService = myService;
@@ -105,37 +100,21 @@ public class MyServiceController : ControllerBase
 }
 ```
 
-### Usage In Minimal APIs
-Usage is identical in minimal APIs
+### 2. In Minimal APIs
+Usage is identical and fully compatible with Minimal API parameter binding.
+
 ```csharp
-// Program.cs
-builder.Services.Configure<MyOptions>("OptionsKey", builder.Configuration.GetSection("MyOptions"));
-builder.Services.AddKeyedConfigurationScoped<MyOptions, MyService>("ServiceKey", "OptionsKey", (sp, key, options) => new MyService(options));
-
-...
-
-// Behind the scenes, MyService was resolved via IConfigurationScopedServiceScopeFactory<MyService>().Create().Service
-app.MapGet("/test", ([FromServices] MyService myService) =>
+app.MapGet("/test", ([FromServices] MyService myService) => 
 {
-    // Do something with myService
+    // Use myService safely here
     return Results.Ok();
 });
 ```
 
-## Usage External To Request Scopes
+### 3. Outside of Request Scopes (e.g., Background Tasks)
+To resolve `ConfigurationScoped` services in background workers, use `IConfigurationScopedServiceScopeFactory<TServiceType>` to safely manage the reference lifespan manually.
 
-ConfigurationScoped services can be resolved anywhere with the use of `IConfigurationScopedServiceScopeFactory<TServiceType>`.
-The ref-count of the current service instance is incremented and decremented with the lifetime of the manually created
-scope (incremented on scope start and decremented on scope end).
-
-### Example
 ```csharp
-// Program.cs
-builder.Services.Configure<MyOptions>(builder.Configuration.GetSection("MyOptions"));
-builder.Services.AddConfigurationScoped<MyOptions, MyService>((sp, config) => new MyService(config));
-
-...
-
 // MyBackgroundService.cs
 public class MyBackgroundService : BackgroundService
 {
@@ -148,29 +127,32 @@ public class MyBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (true)
+        while (!stoppingToken.IsCancellationRequested)
         {
-            stoppingToken.ThrowIfCancellationRequested();
-
-            // Ref-count incremented on create
+            // Scope creation increments the reference count
             using (var scope = _myServiceScopeFactory.Create())
             {
                 var service = scope.Service;
-                // Do something with service
-            }
-            // Ref-count decremented on dispose
+                // Execute logic with the service instance safely
+            } 
+            // Disposing the scope decrements the reference count
+
             await Task.Delay(1000, stoppingToken);
         }
     }
 }
 ```
 
-## Why is IOptionsMonitor Potentially Unsafe As a Reload Trigger?
-IOptionsMonitor change notifications are not coordinated with request processing (or with anything for that matter).
-They are fired on a background thread and it is up to the application code to deal with it. Most code I see does not
-take this into account.
+---
 
-Take the following example:
+## ⚠️ Why is IOptionsMonitor Potentially Unsafe As a Reload Trigger?
+
+`IOptionsMonitor` change notifications are entirely disconnected from the .NET request pipeline. Updates execute on a background thread asynchronously, leaving application code vulnerable to race conditions and mid-request state modifications.
+
+### The Race Condition Problem
+
+Consider this common but flawed implementation:
+
 ```csharp
 // MyService.cs
 public class MyService
@@ -180,62 +162,42 @@ public class MyService
     public MyService(IOptionsMonitor<MyOptions> optionsMonitor)
     {
         _options = optionsMonitor.CurrentValue;
-        optionsMonitor.OnChange(o => _options = o);
+        optionsMonitor.OnChange(o => _options = o); // Updates via background thread
     }
 
-    public bool IsFeatureAEnabled()
-    {
-        return _options.FeatureAEnabled;
-    }
+    public bool IsFeatureAEnabled() => _options.FeatureAEnabled;
 
     public int DoFeatureA()
     {
         if (!_options.FeatureAEnabled)
         {
-            throw new Exception("Feature A is not enabled.  Callers must check first before invoking this method.");
+            throw new Exception("Feature A is disabled!");
         }
-        // Do something awesome
         return 1;
     }
 }
 
-...
-
-//MyServiceController.cs
-[ApiController]
-[Route("[controller]")]
-public class MyServiceController : ControllerBase
+// MyServiceController.cs
+[HttpGet]
+public int Get()
 {
-    private readonly MyService _myService;
-
-    public MyServiceController2(MyService myService)
+    if (_myService.IsFeatureAEnabled())
     {
-        _myService = myService;
+        // 💥 RACE CONDITION: If appsettings.json is saved and modifies MyOptions 
+        // right here, the next line throws an unexpected Exception!
+        return _myService.DoFeatureA();
     }
-
-    [HttpGet]
-    public int DoFeatureA()
-    {
-        if (_myService.IsFeatureAEnabled())
-        {
-            // It is entirely possible a change to MyOptions disabled the feature.
-            // But we are already passed the check, the next line will throw an exception.
-            return _myService.DoFeatureA();
-        }
-        return -1;
-    }
+    return -1;
 }
 ```
-The controller implementation does exactly what it's supposed to do.  It checks if FeatureA is enabled before calling
-in to DoFeatureA(). However, if FeatureA is disabled in the middle of handling this request we may see an exception
-thrown in DoFeatureA().
-You can convince yourself of this by running the IOptionsMonitorSample project in the repo and performing the following
-steps
- 1. Run the IOptionsMonitorSample project and navigate to the swagger page (Should be https://localhost:7028/swagger)
- 2. Invoke the "TestWithDelay" endpoint (it is instrumented to delay for 10 seconds between the IsFeatureAEnabled() and DoFeatureA() calls)
- 3. While the endpoint is processing, go to appsettings.json in the solution and set the "FeatureAEnabled" option to false and save the file
- 4. "TestWithDelay" will eventually throw an exception
 
-There is no form of locking, either internally in MyService or in the controller, that can fix this problem.
+The controller logic looks safe on paper: it checks if the feature is active before execution. However, if a configuration change occurs exactly *between* the check and the method invocation, your logic flow is now in an invalid state: It would have never reached that line of code if the initial conditions of the request were held constant.
 
-**See above on how you can ensure a configuration rug pull doesn't occur mid request :)**
+### How to reproduce this issue in the repository:
+1. Run the `IOptionsMonitorSample` project and open Swagger (`https://localhost:7028/swagger`).
+2. Open `appsettings.json` and get ready to make a change to the `FeatureAEnabled` setting. 
+2. IN swagger, execute the `TestWithDelay` endpoint (introduces a 10-second delay between the feature check and execution to give you time to make the settings change).
+3. In `appsettings.json` change `"FeatureAEnabled"` to `false`, then save.
+4. The request will throw an exception.
+
+`ConfigurationScopedService` prevents this structural "rug pull" entirely, ensuring your application stays predictable and reliable.
